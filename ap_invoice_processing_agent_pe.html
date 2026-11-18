@@ -1,0 +1,344 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Process Explorer · Invoice Processing Agent</title>
+<style>
+  *{box-sizing:border-box}
+  html,body{margin:0;height:100%;background:#fff;font-family:Inter,"Segoe UI",-apple-system,BlinkMacSystemFont,Roboto,Helvetica,Arial,sans-serif;color:#1F2633}
+  #frame{position:relative;height:100%;border:1px solid #DCE0E6;overflow:hidden}
+  #canvas{position:absolute;inset:0;overflow:auto;cursor:grab}
+  #canvas.drag{cursor:grabbing}
+  #canvas::-webkit-scrollbar{width:0;height:0}
+  svg text{font-family:inherit}
+  .bar{position:absolute;display:flex;gap:6px;z-index:2}
+  .bar .tb{position:static}
+  .tb{position:absolute;background:#fff;border:1px solid #D5D9E0;border-radius:4px;display:flex;align-items:center;box-shadow:0 1px 2px rgba(20,30,50,.06);z-index:2}
+  .tb .b{display:flex;align-items:center;justify-content:center;gap:4px;height:26px;min-width:26px;padding:0 6px;font-size:12px;color:#1F2633;cursor:pointer;user-select:none}
+  .tb .b:hover{background:#F2F4F7}
+  .vsep{width:1px;height:18px;background:#E1E4E9;margin:0 2px}
+  .col{flex-direction:column;padding:4px 0}
+  .col .b{width:28px;height:28px;padding:0}
+  .slider{position:relative;width:28px;height:110px;display:flex;justify-content:center}
+  .slider .track{width:3px;background:#1F2633;border-radius:2px;height:100%}
+  .slider .track.light{background:#DCE0E6}
+  .slider .knob{position:absolute;left:50%;width:12px;height:12px;border:1.5px solid #1F2633;background:#fff;border-radius:50%;transform:translate(-50%,-50%)}
+  .hsep{height:1px;width:22px;background:#E1E4E9;margin:4px 0}
+  .zoomval{font-size:12px;min-width:44px;display:flex;align-items:center;justify-content:center;gap:4px}
+  #legend{position:absolute;right:100px;bottom:44px;background:#fff;border:1px solid #D5D9E0;border-radius:4px;box-shadow:0 4px 12px rgba(20,30,50,.10);padding:10px 12px;font-size:12px;display:none;z-index:3;min-width:230px}
+  #legend .row{display:flex;align-items:center;gap:8px;padding:4px 0}
+  #legend .sw{width:16px;height:4px;border-radius:2px}
+  #legend .n{margin-left:auto;color:#5D6577;font-size:11px}
+  #legend h4{margin:0 0 4px;font-size:11px;font-weight:600;color:#5D6577;text-transform:uppercase;letter-spacing:.03em}
+</style>
+</head>
+<body>
+<div id="frame">
+  <div id="canvas"><svg id="pe" xmlns="http://www.w3.org/2000/svg"></svg></div>
+
+  <!-- top-left toolbars -->
+  <div class="bar" style="left:6px;top:6px"><div class="tb">
+    <div class="b" title="Objects"><svg width="22" height="14" viewBox="0 0 22 14"><rect x="1" y="2" width="8" height="10" rx="2" fill="none" stroke="#1D7A80" stroke-width="2"/><rect x="6" y="2" width="8" height="10" rx="2" fill="#1D7A80"/><rect x="11" y="3.5" width="4" height="7" rx="1" fill="#fff"/></svg><span>+3</span></div>
+    <div class="b" title="Activities"><svg width="14" height="14" viewBox="0 0 14 14"><path d="M2 2v10M2 7h10M6 4.5h6M6 9.5h6" stroke="#1F2633" stroke-width="1.4" fill="none"/></svg><span>13</span></div>
+  </div>
+  <div class="tb">
+    <div class="b" title="KPIs"><svg width="16" height="16" viewBox="0 0 16 16"><rect x="1.5" y="1.5" width="13" height="13" rx="2.5" fill="none" stroke="#1F2633" stroke-width="1.3"/><text x="8" y="11.5" text-anchor="middle" font-size="9" font-weight="700" fill="#1F2633">#</text></svg></div>
+    <div class="vsep"></div>
+    <div class="b" title="Animate"><svg width="14" height="14" viewBox="0 0 14 14"><path d="M3 1.5L12 7L3 12.5Z" fill="#1F2633"/></svg></div>
+  </div></div>
+
+  <!-- right toolbars -->
+  <div class="tb" style="right:6px;top:6px"><div class="b" style="width:28px;height:28px;padding:0"><svg width="15" height="15" viewBox="0 0 15 15"><circle cx="6.3" cy="6.3" r="4.6" fill="none" stroke="#1F2633" stroke-width="1.4"/><path d="M9.8 9.8L13.5 13.5" stroke="#1F2633" stroke-width="1.5"/></svg></div></div>
+  <div class="tb col" style="right:6px;top:40px">
+    <div class="b"><svg width="14" height="16" viewBox="0 0 14 16"><circle cx="3.5" cy="3" r="1.8" fill="none" stroke="#1B5BF5" stroke-width="1.3"/><circle cx="10.5" cy="3" r="1.8" fill="none" stroke="#1B5BF5" stroke-width="1.3"/><circle cx="3.5" cy="13" r="1.8" fill="none" stroke="#1B5BF5" stroke-width="1.3"/><path d="M3.5 5v6M10.5 5c0 4-7 3-7 6" fill="none" stroke="#1B5BF5" stroke-width="1.3"/></svg></div>
+    <div class="b"><svg width="14" height="14" viewBox="0 0 14 14"><path d="M2 2v10M5 7h7" stroke="#1F2633" stroke-width="1.4"/><circle cx="8.5" cy="7" r="2" fill="#fff" stroke="#1F2633" stroke-width="1.3"/></svg></div>
+    <div class="hsep"></div>
+    <div class="b" style="color:#9AA1AE;background:#EEF0F3;border-radius:3px">+</div>
+    <div class="slider"><div class="track"></div><div class="knob" style="top:4%"></div></div>
+    <div class="b">−</div>
+    <div class="hsep"></div>
+    <div class="b"><svg width="14" height="14" viewBox="0 0 14 14"><path d="M8 2h4v4M6 12H2V8M12 2L8.5 5.5M2 12l3.5-3.5" fill="none" stroke="#1B5BF5" stroke-width="1.4"/></svg></div>
+  </div>
+  <div class="tb col" style="right:6px;top:282px">
+    <div class="b"><svg width="16" height="16" viewBox="0 0 16 16"><circle cx="3.5" cy="3.5" r="1.8" fill="none" stroke="#1F2633" stroke-width="1.2"/><circle cx="12.5" cy="12.5" r="1.8" fill="none" stroke="#1F2633" stroke-width="1.2"/><path d="M5 5l6 6" stroke="#1F2633" stroke-width="1.2"/></svg></div>
+    <div class="hsep"></div>
+    <div class="b">+</div>
+    <div class="slider"><div class="track light"></div><div class="knob" style="top:96%"></div></div>
+    <div class="b" style="color:#9AA1AE;background:#EEF0F3;border-radius:3px">−</div>
+    <div class="hsep"></div>
+    <div class="b"><svg width="14" height="14" viewBox="0 0 14 14"><path d="M8 2h4v4M6 12H2V8M12 2L8.5 5.5M2 12l3.5-3.5" fill="none" stroke="#1B5BF5" stroke-width="1.4"/></svg></div>
+  </div>
+
+  <!-- bottom-right -->
+  <div class="bar" style="right:6px;bottom:6px"><div class="tb"><div class="b" id="legendBtn" style="padding:0 10px"><svg width="14" height="12" viewBox="0 0 14 12"><path d="M1 2h2M5 2h8M1 6h2M5 6h8M1 10h2M5 10h8" stroke="#1F2633" stroke-width="1.4"/></svg><span>&nbsp;Legend</span></div></div>
+  <div class="tb">
+    <div class="b" id="fit" title="Fit"><svg width="14" height="14" viewBox="0 0 14 14"><rect x="1.5" y="1.5" width="11" height="11" rx="2" fill="none" stroke="#1F2633" stroke-width="1.3"/><rect x="4.5" y="4.5" width="5" height="5" fill="none" stroke="#1F2633" stroke-width="1.1"/></svg></div>
+    <div class="b" id="zout">−</div>
+    <div class="zoomval" id="zval">60% <svg width="9" height="6" viewBox="0 0 9 6"><path d="M1 1l3.5 3.5L8 1" fill="none" stroke="#1F2633" stroke-width="1.4"/></svg></div>
+    <div class="b" id="zin">+</div>
+  </div></div>
+  <div id="legend">
+    <h4>Objects</h4>
+    <div class="row"><span class="sw" style="background:#1D7A80"></span>VendorInvoice<span class="n">82.3K</span></div>
+    <div class="row"><span class="sw" style="background:#3AA6A4"></span>VendorAccountDocumentItem<span class="n">82.3K</span></div>
+    <div class="row"><span class="sw" style="background:#EE1FDF"></span>InvoiceProcessingAgent Activity<span class="n">48K</span></div>
+    <div class="row"><span class="sw" style="background:#A42AB8"></span>TaskMiningAPClerk Activity<span class="n">48.22K</span></div>
+  </div>
+</div>
+
+<script>
+/* Shared Process Explorer, Q3 2026, SAP. Two clusters on one canvas (AP left, AR right).
+   AP: 82,300 vendor invoices; Invoice Processing Agent ran on 48,000 (automated 34,080 / overridden 6,480 / handed off 7,440);
+       AP team entered 34,300 directly. Hand-offs: new vendor 1,042 · no PO 2,827 + price mismatch 1,562 · low confidence 2,009.
+   AR: 41,000 overdue customer items; Late Payment Agent worked 21,000 (automated 13,060 / overridden 2,110 / handed off 5,830);
+       collectors worked 20,000 directly. Hand-offs: dispute 2,682 · no response after 3 reminders 1,049 · payment plan 1,632 + other 467. */
+const C = {T:'#1D7A80', I:'#3AA6A4', M:'#EE1FDF', P:'#A42AB8', CU:'#2D5BB9', L:'#F07F1A', K:'#6C4BD1'};
+const X = 900; const ax = v => v + X;
+const AR = pts => pts.map(([x,y]) => [ax(x), y]);
+const fmt = n => n >= 1000 ? (+(n/1000).toFixed(2)) + 'K' : String(n);
+
+const ALL_NODES = [
+  /* ---------- AP ---------- */
+  {start:'I', x:40,  y:40,  name:'VendorAccountDocumentItem', n:82300},
+  {start:'T', x:185, y:110, name:'VendorInvoice', n:82300},
+  {start:'M', x:200, y:170, name:'InvoiceProcessingAgent Activity', n:48000},
+  {y:240, c:[[200,'M']], name:'ReadInvoice', n:[48000]},
+  {start:'P', x:520, y:300, name:'TaskMiningAPClerk Activity', n:48220},
+  {y:320, c:[[200,'M']], name:'CheckSupplier', n:[48000]},
+  {y:400, c:[[200,'M']], name:'MatchPurchaseOrder', n:[46958]},
+  {y:480, c:[[200,'M']], name:'ProposeCoding', n:[42569]},
+  {y:580, c:[[505,'M'],[520,'P']], name:'EscalatedToAPTeam', n:[7440,7440]},
+  {end:'M', x:440, y:630},
+  {y:660, c:[[520,'P']], name:'ReviewAgentOutput', n:[7440]},
+  {y:740, c:[[185,'T'],[200,'M'],[215,'P']], name:'EnterVendorInvoice', n:[82300,40560,41740]},
+  {end:'M', x:300, y:810}, {end:'P', x:440, y:810},
+  {y:840, c:[[170,'I'],[185,'T']], name:'PostVendorAccountDocumentItem', n:[82300,82300]},
+  {y:920, c:[[505,'T'],[520,'P']], name:'ChangeVendorInvoice', n:[6480,6480]},
+  {end:'P', x:520, y:975}, {end:'T', x:185, y:990},
+  {y:1060, c:[[170,'I']], name:'SetPaymentBlock', n:[3950]},
+  {y:1140, c:[[170,'I']], name:'ReleasePaymentBlock', n:[3950]},
+  {y:1220, c:[[170,'I']], name:'DueDateVendorAccountDocumentItem', n:[82300]},
+  {y:1300, c:[[170,'I']], name:'ClearVendorAccountItem', n:[80950]},
+  {end:'I', x:170, y:1380},
+  /* ---------- AR ---------- */
+  {start:'CU', x:ax(185), y:40, name:'CustomerAccountDebitItem', n:41000},
+  {y:110, c:[[ax(185),'CU']], name:'PostCustomerAccountDebitItem', n:[41000]},
+  {y:180, c:[[ax(185),'CU']], name:'DueDateCustomerAccountDebitItem', n:[41000]},
+  {start:'L', x:ax(200), y:240, name:'LatePaymentAgent Activity', n:21000},
+  {start:'K', x:ax(560), y:240, name:'TaskMiningCollector Activity', n:27940},
+  {y:310, c:[[ax(200),'L']], name:'GetOpenItems', n:[21000]},
+  {y:390, c:[[ax(200),'L']], name:'CheckDisputeStatus', n:[21000]},
+  {y:470, c:[[ax(185),'CU'],[ax(200),'L']], name:'SendPaymentReminder', n:[18318,18318]},
+  {y:550, c:[[ax(200),'L']], name:'ClassifyCustomerReply', n:[17269]},
+  {y:610, c:[[ax(380),'L'],[ax(395),'K']], name:'EscalatedToCollector', n:[5830,5830]},
+  {y:630, c:[[ax(185),'CU'],[ax(200),'L']], name:'RecordPromiseToPay', n:[15170,15170]},
+  {y:690, c:[[ax(395),'K']], name:'ContactCustomer', n:[25830]},
+  {end:'L', x:ax(200), y:725},
+  {end:'K', x:ax(395), y:740},
+  {y:800, c:[[ax(505),'CU'],[ax(520),'K']], name:'ChangeCustomerAccountDebitItem', n:[2110,2110]},
+  {end:'K', x:ax(520), y:850},
+  {y:880, c:[[ax(185),'CU']], name:'ClearCustomerAccountItem', n:[39270]},
+  {end:'CU', x:ax(185), y:960}
+];
+
+/* [object, count, polyline, label align (r/l/c), optional explicit label point] */
+const ALL_EDGES = [
+  /* AP · agent */
+  ['M',48000,[[200,170],[200,240]],'r'],
+  ['M',48000,[[200,240],[200,320]],'r'],
+  ['M',46958,[[200,320],[200,400]],'r'],
+  ['M',42569,[[200,400],[200,480]],'r'],
+  ['M',40560,[[200,480],[200,740]],'r'],
+  ['M',1042,[[200,320],[200,346],[505,346],[505,580]],'c',[440,346]],
+  ['M',4389,[[200,400],[200,426],[505,426],[505,580]],'c',[440,426]],
+  ['M',2009,[[200,480],[200,506],[505,506],[505,580]],'c',[440,506]],
+  ['M',7440,[[505,580],[505,606],[440,606],[440,630]],'c',[472,606]],
+  ['M',40560,[[200,740],[200,780],[300,780],[300,810]],'c',[255,780]],
+  /* AP · clerk */
+  ['P',7440,[[520,300],[520,580]],'r',[520,450]],
+  ['P',7440,[[520,580],[520,660]],'r'],
+  ['P',7440,[[520,660],[520,692],[215,692],[215,740]],'c',[330,692]],
+  ['P',34300,[[520,300],[520,316],[705,316],[705,692],[215,692],[215,740]],'r',[705,500]],
+  ['P',41740,[[215,740],[215,766],[440,766],[440,810]],'c',[350,766]],
+  ['P',6480,[[520,300],[520,316],[735,316],[735,894],[520,894],[520,920]],'r',[735,800]],
+  ['P',6480,[[520,920],[520,975]],'r'],
+  /* AP · invoice */
+  ['T',82300,[[185,110],[185,740]],'l',[185,420]],
+  ['T',82300,[[185,740],[185,840]],'l'],
+  ['T',6480,[[185,840],[185,866],[505,866],[505,920]],'c',[440,866]],
+  ['T',75820,[[185,840],[185,990]],'r',[185,905]],
+  ['T',6480,[[505,920],[505,946],[185,946],[185,990]],'c',[440,946]],
+  /* AP · payable item */
+  ['I',82300,[[40,40],[40,812],[170,812],[170,840]],'r',[40,430]],
+  ['I',3950,[[170,840],[170,1060]],'r',[170,1020]],
+  ['I',78350,[[170,840],[170,862],[110,862],[110,1196],[170,1196],[170,1220]],'l',[110,1030]],
+  ['I',3950,[[170,1060],[170,1140]],'r'],
+  ['I',3950,[[170,1140],[170,1220]],'r'],
+  ['I',80950,[[170,1220],[170,1300]],'r'],
+  ['I',1350,[[170,1220],[170,1246],[110,1246],[110,1380],[170,1380]],'l',[110,1313]],
+  ['I',80950,[[170,1300],[170,1380]],'r'],
+  /* AR · customer item */
+  ['CU',41000,AR([[185,40],[185,110]]),'r'],
+  ['CU',41000,AR([[185,110],[185,180]]),'r'],
+  ['CU',18318,AR([[185,180],[185,470]]),'l',[ax(185),330]],
+  ['CU',20952,AR([[185,180],[185,206],[120,206],[120,854],[185,854],[185,880]]),'l',[ax(120),420]],
+  ['CU',1730,AR([[185,180],[185,206],[120,206],[120,960],[185,960]]),'l',[ax(120),920]],
+  ['CU',15170,AR([[185,470],[185,630]]),'l',[ax(185),590]],
+  ['CU',3148,AR([[185,470],[185,490],[120,490],[120,854],[185,854],[185,880]]),'l',[ax(120),560]],
+  ['CU',2110,AR([[185,630],[185,770],[505,770],[505,800]]),'c',[ax(330),770]],
+  ['CU',13060,AR([[185,630],[185,880]]),'l',[ax(185),720]],
+  ['CU',2110,AR([[505,800],[505,826],[185,826],[185,880]]),'c',[ax(330),826]],
+  ['CU',39270,AR([[185,880],[185,960]]),'r'],
+  /* AR · agent */
+  ['L',21000,AR([[200,240],[200,310]]),'r'],
+  ['L',21000,AR([[200,310],[200,390]]),'r'],
+  ['L',18318,AR([[200,390],[200,470]]),'r'],
+  ['L',17269,AR([[200,470],[200,550]]),'r'],
+  ['L',15170,AR([[200,550],[200,630]]),'r'],
+  ['L',2682,AR([[200,390],[200,416],[380,416],[380,610]]),'c',[ax(330),416]],
+  ['L',1049,AR([[200,470],[200,496],[380,496],[380,610]]),'c',[ax(330),496]],
+  ['L',2099,AR([[200,550],[200,576],[380,576],[380,610]]),'c',[ax(330),576]],
+  ['L',15170,AR([[200,630],[200,725]]),'r',[ax(200),698]],
+  ['L',5830,AR([[380,610],[380,674],[200,674],[200,725]]),'c',[ax(290),674]],
+  /* AR · collector */
+  ['K',5830,AR([[560,240],[560,588],[395,588],[395,610]]),'r',[ax(560),300]],
+  ['K',20000,AR([[560,240],[560,652],[395,652],[395,690]]),'r',[ax(560),420]],
+  ['K',2110,AR([[560,240],[560,776],[520,776],[520,800]]),'r',[ax(560),720]],
+  ['K',5830,AR([[395,610],[395,690]]),'r',[ax(395),632]],
+  ['K',25830,AR([[395,690],[395,740]]),'r',[ax(395),716]],
+  ['K',2110,AR([[520,800],[520,850]]),'r']
+];
+const CL = 'AP';
+const isAR = x => x >= 850;
+const sx = x => CL === 'AR' ? x - X : x;
+const NODES = ALL_NODES.filter(n => isAR(n.x ?? n.c[0][0]) === (CL === 'AR'))
+  .map(n => n.c ? {...n, c: n.c.map(([x,o]) => [sx(x), o])} : {...n, x: sx(n.x)});
+const EDGES = ALL_EDGES.filter(e => isAR(e[2][0][0]) === (CL === 'AR'))
+  .map(([o,n,pts,al,lp]) => [o, n, pts.map(([x,y]) => [sx(x), y]), al, lp ? [sx(lp[0]), lp[1]] : lp]);
+const W = 830, H = 1470;
+
+const svg = document.getElementById('pe');
+const NS = 'http://www.w3.org/2000/svg';
+const mk = (t,a,p) => { const e=document.createElementNS(NS,t); for(const k in a) e.setAttribute(k,a[k]); (p||svg).appendChild(e); return e; };
+const ctx = document.createElement('canvas').getContext('2d');
+const tw = (s, f) => { ctx.font = f; return ctx.measureText(s).width; };
+const FONT = 'Inter, "Segoe UI", -apple-system, Roboto, Helvetica, Arial, sans-serif';
+
+const defs = mk('defs',{});
+defs.innerHTML = `<filter id="sh" x="-10%" y="-20%" width="120%" height="160%"><feDropShadow dx="0" dy="1" stdDeviation="1" flood-color="#14203a" flood-opacity=".10"/></filter>` +
+  Object.entries(C).map(([k,c]) => `<marker id="a${k}" viewBox="0 0 10 10" refX="9" refY="5" markerUnits="userSpaceOnUse" markerWidth="10" markerHeight="10" orient="auto"><path d="M0,0.5 L10,5 L0,9.5 z" fill="${c}"/></marker>`).join('');
+const root = mk('g',{transform:'translate(40,56)'});
+const gE = mk('g',{},root), gL = mk('g',{},root), gN = mk('g',{},root);
+
+/* rounded orthogonal polyline; last point pulled back so the arrow touches the node ring */
+function roundPath(pts, r, endGap){
+  pts = pts.map(p => p.slice());
+  const a = pts[pts.length-2], b = pts[pts.length-1];
+  const dx = Math.sign(b[0]-a[0]), dy = Math.sign(b[1]-a[1]);
+  b[0] -= dx*endGap; b[1] -= dy*endGap;
+  let d = `M${pts[0][0]},${pts[0][1]}`;
+  for (let i=1;i<pts.length-1;i++){
+    const p0=pts[i-1], p1=pts[i], p2=pts[i+1];
+    const l1=Math.hypot(p1[0]-p0[0],p1[1]-p0[1]), l2=Math.hypot(p2[0]-p1[0],p2[1]-p1[1]);
+    const rr=Math.min(r,l1/2,l2/2);
+    const q1=[p1[0]+(p0[0]-p1[0])*rr/l1, p1[1]+(p0[1]-p1[1])*rr/l1];
+    const q2=[p1[0]+(p2[0]-p1[0])*rr/l2, p1[1]+(p2[1]-p1[1])*rr/l2];
+    d += ` L${q1[0]},${q1[1]} Q${p1[0]},${p1[1]} ${q2[0]},${q2[1]}`;
+  }
+  return d + ` L${b[0]},${b[1]}`;
+}
+
+function pill(x, y, text, align){
+  const f = `500 9.5px ${FONT}`;
+  const w = 18 + tw(text, f) + 6, h = 15;
+  const x0 = align==='r' ? x-3 : align==='l' ? x-w+3 : x-w/2;
+  const g = mk('g',{}, gL);
+  mk('rect',{x:x0, y:y-h/2, width:w, height:h, rx:2.5, fill:'#fff', stroke:'#C9CED7','stroke-width':.8}, g);
+  mk('rect',{x:x0+4.5, y:y-3.5, width:7, height:7, rx:1.5, fill:'none', stroke:'#7A8293','stroke-width':.9}, g);
+  mk('path',{d:`M${x0+6.5},${y} h3`, stroke:'#7A8293','stroke-width':.9}, g);
+  mk('text',{x:x0+16, y:y+3.3, 'font-size':9.5, 'font-weight':500, fill:'#3B4252'}, g).textContent = text;
+}
+
+EDGES.forEach(([o, n, pts, al, lp]) => {
+  const w = 1.1 + 3.4*Math.sqrt(n/82300);
+  const endNode = NODES.find(nd => nd.end && nd.x===pts.at(-1)[0] && nd.y===pts.at(-1)[1]);
+  mk('path',{d:roundPath(pts, 12, endNode ? 7 : 7.5), fill:'none', stroke:C[o], 'stroke-width':w,
+    'stroke-opacity': n < 8000 ? .6 : 1, 'stroke-linecap':'round', 'marker-end':`url(#a${o})`}, gE);
+  /* label on longest segment */
+  let best=0, bi=0;
+  for (let i=0;i<pts.length-1;i++){ const l=Math.hypot(pts[i+1][0]-pts[i][0],pts[i+1][1]-pts[i][1]); if(l>best){best=l;bi=i;} }
+  const [p,q] = [pts[bi], pts[bi+1]];
+  const vertical = p[0]===q[0];
+  if (lp) pill(lp[0], lp[1], fmt(n), al);
+  else pill((p[0]+q[0])/2, (p[1]+q[1])/2, fmt(n), vertical ? al : 'c');
+});
+
+NODES.forEach(nd => {
+  const g = mk('g',{}, gN);
+  if (nd.start){
+    const c = C[nd.start];
+    mk('circle',{cx:nd.x, cy:nd.y, r:6.5, fill:'#fff', stroke:c, 'stroke-width':1.6}, g);
+    mk('text',{x:nd.x+12, y:nd.y-2, 'font-size':10.5, 'font-weight':600, fill:'#1F2633'}, g).textContent = nd.name;
+    const sx = nd.x+12, sy = nd.y+11;
+    mk('rect',{x:sx, y:sy-6.5, width:7, height:7, rx:1.5, fill:'none', stroke:'#7A8293','stroke-width':.9}, g);
+    mk('text',{x:sx+10, y:sy, 'font-size':9.5, fill:'#5D6577'}, g).textContent = fmt(nd.n) + ' objects';
+    return;
+  }
+  if (nd.end){
+    mk('circle',{cx:nd.x, cy:nd.y, r:6.5, fill:C[nd.end]}, g);
+    return;
+  }
+  nd.c.forEach(([x,o]) => {
+    mk('circle',{cx:x, cy:nd.y, r:6.2, fill:'#fff', stroke:C[o], 'stroke-width':1.7}, g);
+    mk('circle',{cx:x, cy:nd.y, r:3.3, fill:C[o]}, g);
+  });
+  const x0 = nd.c.at(-1)[0] + 12;
+  const fName = `500 10.5px ${FONT}`, fSub = `400 9.5px ${FONT}`;
+  let subW;
+  if (nd.n.length === 1) subW = tw(fmt(nd.n[0]) + ' times', fSub);
+  else subW = nd.n.reduce((s,v) => s + 9 + tw(fmt(v), fSub) + 5, 0) + tw('times', fSub);
+  const w = Math.max(tw(nd.name, fName), subW) + 16, h = 30;
+  mk('rect',{x:x0, y:nd.y-h/2, width:w, height:h, rx:3, fill:'#fff', stroke:'#CDD2DA','stroke-width':.8, filter:'url(#sh)'}, g);
+  mk('text',{x:x0+8, y:nd.y-2.5, 'font-size':10.5, 'font-weight':500, fill:'#1F2633'}, g).textContent = nd.name;
+  if (nd.n.length === 1){
+    mk('text',{x:x0+8, y:nd.y+10, 'font-size':9.5, fill:'#5D6577'}, g).textContent = fmt(nd.n[0]) + ' times';
+  } else {
+    let cx = x0+8;
+    nd.n.forEach((v,i) => {
+      mk('rect',{x:cx, y:nd.y+3.5, width:6, height:6, rx:1, fill:C[nd.c[i][1]]}, g);
+      cx += 9;
+      const t = mk('text',{x:cx, y:nd.y+10, 'font-size':9.5, fill:'#5D6577'}, g); t.textContent = fmt(v);
+      cx += tw(fmt(v), fSub) + 5;
+    });
+    mk('text',{x:cx, y:nd.y+10, 'font-size':9.5, fill:'#5D6577'}, g).textContent = 'times';
+  }
+});
+
+/* zoom + pan */
+let z = 0.6;
+const canvas = document.getElementById('canvas'), zval = document.getElementById('zval');
+function applyZoom(nz, keepCenter=true){
+  const cx = (canvas.scrollLeft + canvas.clientWidth/2)/z, cy = (canvas.scrollTop + canvas.clientHeight/2)/z;
+  z = Math.min(2, Math.max(0.3, nz));
+  const padX = Math.max(0, (canvas.clientWidth - W*z)/2);
+  svg.setAttribute('viewBox', `0 0 ${W} ${H}`);
+  svg.style.width = W*z + 'px'; svg.style.height = H*z + 'px';
+  svg.style.marginLeft = padX + 'px';
+  zval.firstChild.textContent = Math.round(z*100) + '% ';
+  if (keepCenter){ canvas.scrollLeft = cx*z - canvas.clientWidth/2; canvas.scrollTop = cy*z - canvas.clientHeight/2; }
+}
+document.getElementById('zin').onclick = () => applyZoom(z + 0.1);
+document.getElementById('zout').onclick = () => applyZoom(z - 0.1);
+document.getElementById('fit').onclick = () => { applyZoom(Math.min(canvas.clientWidth/W, canvas.clientHeight/H), false); canvas.scrollTop = 0; };
+document.getElementById('legendBtn').onclick = () => { const l = document.getElementById('legend'); l.style.display = l.style.display==='block' ? 'none' : 'block'; };
+canvas.addEventListener('wheel', e => { if (e.ctrlKey || e.metaKey){ e.preventDefault(); applyZoom(z - e.deltaY*0.002); } }, {passive:false});
+let drag = null;
+canvas.addEventListener('mousedown', e => { drag = {x:e.clientX, y:e.clientY, l:canvas.scrollLeft, t:canvas.scrollTop}; canvas.classList.add('drag'); });
+window.addEventListener('mousemove', e => { if (!drag) return; canvas.scrollLeft = drag.l - (e.clientX-drag.x); canvas.scrollTop = drag.t - (e.clientY-drag.y); });
+window.addEventListener('mouseup', () => { drag = null; canvas.classList.remove('drag'); });
+window.addEventListener('resize', () => applyZoom(z, false));
+applyZoom(Math.min(1, canvas.clientWidth/W, Math.max(0.6, canvas.clientHeight/H)), false);
+</script>
+</body>
+</html>
